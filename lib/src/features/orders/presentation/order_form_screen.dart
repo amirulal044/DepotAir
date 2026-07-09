@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../customers/data/customer_repository.dart';
 import '../../customers/domain/customer_model.dart';
 import '../../products/data/product_repository.dart';
 import '../../products/domain/product_model.dart';
 import '../data/order_repository.dart';
-import 'package:intl/intl.dart';
+
+import 'widgets/customer_selector_field.dart';
+import 'widgets/product_selector_field.dart';
+import 'widgets/transaction_options_group.dart';
+import 'widgets/order_summary_card.dart';
 
 class OrderFormScreen extends ConsumerStatefulWidget {
   const OrderFormScreen({super.key});
@@ -17,211 +22,47 @@ class OrderFormScreen extends ConsumerStatefulWidget {
 class _OrderFormScreenState extends ConsumerState<OrderFormScreen> {
   Customer? selectedCustomer;
   Product? selectedProduct;
+
   final qtyController = TextEditingController(text: '1');
+
   bool isAntar = false;
   bool isBagiHasil = false;
+  bool isPakaiKupon = false;
   bool isLoading = false;
 
-  // Tambahkan di dalam State class anda:
-  bool isPakaiKupon = false;
-
-  // Fungsi Logika Perhitungan Total (Ditempatkan di dalam build)
-  int hitungTotal() {
-    if (selectedProduct == null) return 0;
-
-    int qty = int.tryParse(qtyController.text) ?? 0;
-    // Jika kupon dipakai, harga produk jadi 0
-    int hargaDasar = isPakaiKupon ? 0 : selectedProduct!.harga;
-    int subtotalProduk = hargaDasar * qty;
-
-    // Biaya antar Rp 1.000 per galon
-    int biayaAntar = isAntar ? (qty * 1000) : 0;
-
-    return subtotalProduk + biayaAntar;
+  @override
+  void dispose() {
+    qtyController.dispose();
+    super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Mengambil data pendukung dari provider fitur lain
-    final customersAsync = ref.watch(customersListProvider);
-    final productsAsync = ref.watch(productsListProvider);
+  int _hitungTotal() {
+    if (selectedProduct == null) return 0;
 
-    // --- LOG DEBUG UNTUK UI ---
-    // Memantau status loading pelanggan
-    customersAsync.when(
-      data: (list) => debugPrint(
-        '📱 [UI LOG] Dropdown Pelanggan siap: ${list.length} orang',
-      ),
-      error: (e, st) =>
-          debugPrint('📱 [UI LOG] Dropdown Pelanggan Error di UI: $e'),
-      loading: () =>
-          debugPrint('📱 [UI LOG] Dropdown Pelanggan sedang loading...'),
-    );
+    final qty = int.tryParse(qtyController.text) ?? 1;
 
-    // Memantau status loading produk
-    productsAsync.when(
-      data: (list) =>
-          debugPrint('📱 [UI LOG] Dropdown Produk siap: ${list.length} item'),
-      error: (e, st) =>
-          debugPrint('📱 [UI LOG] Dropdown Produk Error di UI: $e'),
-      loading: () =>
-          debugPrint('📱 [UI LOG] Dropdown Produk sedang loading...'),
-    );
+    final hargaDasar = isPakaiKupon ? 0 : selectedProduct!.harga;
+    final biayaAntar = isAntar ? qty * 1000 : 0;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Buat Pesanan Baru')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ListView(
-          children: [
-            // 1. Dropdown Pilih Pelanggan
-            customersAsync.when(
-              data: (list) => DropdownButtonFormField<Customer>(
-                decoration: const InputDecoration(labelText: 'Pilih Pelanggan'),
-                value: selectedCustomer,
-                items: list
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c.nama)))
-                    .toList(),
-                onChanged: (val) => setState(() => selectedCustomer = val),
-              ),
-              error: (e, st) => const Text('Gagal memuat pelanggan'),
-              loading: () => const LinearProgressIndicator(),
-            ),
-            const SizedBox(height: 16),
-
-            // 2. Dropdown Pilih Produk
-            productsAsync.when(
-              data: (list) => DropdownButtonFormField<Product>(
-                decoration: const InputDecoration(labelText: 'Pilih Produk'),
-                value: selectedProduct,
-                items: list
-                    .map(
-                      (p) => DropdownMenuItem(
-                        value: p,
-                        child: Text('${p.namaProduk} (${p.ukuran})'),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (val) => setState(() => selectedProduct = val),
-              ),
-              error: (e, st) => const Text('Gagal memuat produk'),
-              loading: () => const LinearProgressIndicator(),
-            ),
-            const SizedBox(height: 16),
-
-            // 3. Input Quantity
-            TextField(
-              controller: qtyController,
-              decoration: const InputDecoration(labelText: 'Jumlah (Qty)'),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 20),
-
-            // 4. Switch Biaya Antar
-            SwitchListTile(
-              title: const Text('Antar ke Rumah (+Rp 1.000/galon)'),
-              value: isAntar,
-              onChanged: (val) {
-                setState(() {
-                  isAntar = val;
-                  if (val)
-                    isBagiHasil = false; // Antar aktif -> Bagi hasil mati
-                });
-              },
-            ),
-
-            // 5. Switch Bagi Hasil (Hanya muncul jika ambil di tempat & 19L)
-            if (!isAntar && selectedProduct?.ukuran == "19 Liter")
-              SwitchListTile(
-                title: const Text('Sistem Bagi Hasil (10%)'),
-                value: isBagiHasil,
-                onChanged: (val) => setState(() => isBagiHasil = val),
-              ),
-
-            // 6. Switch Pakai Kupon (Hanya muncul jika produk 19L)
-            if (selectedProduct?.ukuran == "19 Liter")
-              SwitchListTile(
-                secondary: const Icon(
-                  Icons.confirmation_number,
-                  color: Colors.orange,
-                ),
-                title: const Text('Gunakan Kupon Gratis'),
-                subtitle: const Text('10 Kupon = 1 Galon Gratis'),
-                value: isPakaiKupon,
-                onChanged: (val) {
-                  setState(() {
-                    isPakaiKupon = val;
-                    if (val)
-                      qtyController.text = '1'; // Kupon biasanya untuk 1 galon
-                  });
-                },
-              ),
-
-            const Divider(height: 40),
-
-            // 7. Live Preview Total Harga (Sangat Profesional)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Total Pembayaran:',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    NumberFormat.currency(
-                      locale: 'id_ID',
-                      symbol: 'Rp ',
-                      decimalDigits: 0,
-                    ).format(hitungTotal()),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 8. Tombol Simpan
-            isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : ElevatedButton(
-                    onPressed: _submitOrder,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 55),
-                    ),
-                    child: const Text(
-                      'KONFIRMASI PESANAN',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-          ],
-        ),
-      ),
-    );
+    return (hargaDasar * qty) + biayaAntar;
   }
 
   Future<void> _submitOrder() async {
+    // 1. Validasi Input
     if (selectedCustomer == null || selectedProduct == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pilih pelanggan & produk dulu')),
+        const SnackBar(
+          content: Text('Silakan pilih pelanggan dan produk dulu!'),
+        ),
       );
       return;
     }
 
+    // 2. Set Loading
     setState(() => isLoading = true);
+
     try {
+      // 3. Panggil Repository
       await ref
           .read(orderRepositoryProvider)
           .createOrder(
@@ -229,20 +70,128 @@ class _OrderFormScreenState extends ConsumerState<OrderFormScreen> {
             productId: selectedProduct!.id,
             productPrice: selectedProduct!.harga,
             productSize: selectedProduct!.ukuran,
-            qty: int.parse(qtyController.text),
+            qty: int.tryParse(qtyController.text) ?? 1,
             isAntar: isAntar,
             isBagiHasil: isBagiHasil,
             isPakaiKupon: isPakaiKupon,
           );
 
+      // 4. Refresh List Riwayat Transaksi
       ref.invalidate(ordersListProvider);
-      if (mounted) Navigator.pop(context);
+
+      // 5. Kembali ke halaman sebelumnya
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Transaksi Berhasil Disimpan!')),
+        );
+        Navigator.pop(context);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
+      }
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final customersAsync = ref.watch(customersListProvider);
+    final productsAsync = ref.watch(productsListProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Buat Pesanan Baru')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          CustomerSelectorField(
+            customersAsync: customersAsync,
+            selectedCustomer: selectedCustomer,
+            onChanged: (value) {
+              setState(() {
+                selectedCustomer = value;
+              });
+            },
+          ),
+
+          const SizedBox(height: 16),
+
+          ProductSelectorField(
+            productsAsync: productsAsync,
+            selectedProduct: selectedProduct,
+            onChanged: (value) {
+              setState(() {
+                selectedProduct = value;
+              });
+            },
+          ),
+
+          const SizedBox(height: 16),
+
+          TextField(
+            controller: qtyController,
+            decoration: const InputDecoration(
+              labelText: 'Jumlah (Qty)',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: TextInputType.number,
+            onChanged: (_) => setState(() {}),
+          ),
+
+          const SizedBox(height: 16),
+
+          TransactionOptionsGroup(
+            selectedProduct: selectedProduct,
+            isAntar: isAntar,
+            isBagiHasil: isBagiHasil,
+            isPakaiKupon: isPakaiKupon,
+            onAntarChanged: (value) {
+              setState(() {
+                isAntar = value;
+                if (value) {
+                  isBagiHasil = false;
+                }
+              });
+            },
+            onBagiHasilChanged: (value) {
+              setState(() {
+                isBagiHasil = value;
+              });
+            },
+            onKuponChanged: (value) {
+              setState(() {
+                isPakaiKupon = value;
+                if (value) {
+                  qtyController.text = '1';
+                }
+              });
+            },
+          ),
+
+          const SizedBox(height: 24),
+
+          OrderSummaryCard(total: _hitungTotal()),
+
+          const SizedBox(height: 32),
+
+          SizedBox(
+            height: 50,
+            child: ElevatedButton(
+              onPressed: isLoading ? null : _submitOrder,
+              child: isLoading
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text("Simpan Pesanan"),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
