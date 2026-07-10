@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'src/features/customers/presentation/customer_list_screen.dart';
 import 'src/features/products/presentation/product_list_screen.dart';
 import 'src/features/orders/presentation/order_list_screen.dart';
+import 'home_screen.dart';
 
 void main() async {
   // Pastikan binding Flutter sudah siap
@@ -46,22 +47,7 @@ class MyApp extends StatelessWidget {
       title: 'Depot Air Pro',
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
       home:
-          const OrderListScreen(), // Saya ganti Placeholder dengan widget sederhana
-    );
-  }
-}
-
-// Widget sederhana untuk tampilan awal
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Depot Air Pro')),
-      body: const Center(
-        child: Text('Koneksi Supabase Berhasil!\nCek Debug Console Anda.'),
-      ),
+          const HomeScreen(), // Saya ganti Placeholder dengan widget sederhana
     );
   }
 }

@@ -1,66 +1,94 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/order_model.dart';
+import '../domain/cart_item_model.dart'; // <--- Pastikan import model keranjang belanja ini ada
 
 class OrderRepository {
   final _supabase = Supabase.instance.client;
 
-  // 1. Fungsi Ambil Riwayat Transaksi (dengan JOIN tabel pelanggan dan produk)
+  // 1. Fungsi Mengambil Riwayat Transaksi (Jalur Baru: orders -> order_items -> produk)
   Future<List<Order>> fetchOrders() async {
     final response = await _supabase
         .from('orders')
-        .select('*, pelanggan(nama), produk(nama_produk)')
+        .select('*, pelanggan(nama), order_items(*, produk(nama_produk))')
         .order('created_at', ascending: false);
 
     return response.map((data) => Order.fromJson(data)).toList();
   }
 
-  // 2. FUNGSI INTI: Simpan Transaksi dengan Logika Bisnis
-  Future<void> createOrder({
+  // 2. FUNGSI UTAMA: Menyimpan banyak pesanan sekaligus (Batch Insert) dengan pembagian bagi hasil
+  Future<void> createBulkOrders({
     required String customerId,
-    required String productId,
-    required int productPrice,
-    required String productSize,
-    required int qty,
-    required bool isAntar,
-    required bool isBagiHasil,
-    required bool isPakaiKupon,
+    required List<CartItem> cartItems,
+    required int totalBayar,
   }) async {
-    // A. Hitung Harga Dasar
-    int currentPrice = isPakaiKupon ? 0 : productPrice;
+    // A. Simpan data transaksi utama ke tabel induk 'orders'
+    final response = await _supabase
+        .from('orders')
+        .insert({'customer_id': customerId, 'total_bayar': totalBayar})
+        .select('id')
+        .single();
 
-    // B. Hitung Biaya Antar (1.000 per galon jika diantar)
-    int biayaAntar = isAntar ? (qty * 1000) : 0;
+    final String orderId =
+        response['id']; // Ambil ID transaksi induk yang baru saja dibuat
 
-    // C. Hitung Total Akhir
-    int totalHarga = (currentPrice * qty) + biayaAntar;
+    // B. Siapkan rincian barang belanjaan beserta pembagian porsi uangnya
+    final List<Map<String, dynamic>> itemsToInsert = cartItems.map((item) {
+      // 1. Hitung harga air (jika pakai kupon gratis, harga air dihitung 0)
+      final int hargaDasar = item.isPakaiKupon ? 0 : item.product.harga;
 
-    // D. Simpan ke Tabel Orders
-    await _supabase.from('orders').insert({
-      'customer_id': customerId,
-      'product_id': productId,
-      'qty': qty,
-      'is_antar': isAntar,
-      'biaya_antar': biayaAntar,
-      'is_bagi_hasil': isBagiHasil,
-      'total_harga': totalHarga,
-      'is_pakai_kupon': isPakaiKupon,
-    });
+      // 2. Hitung biaya antar total (Rp 1.000 per galon jika diantar)
+      final int biayaAntarTotal = item.isAntar ? (item.qty * 1000) : 0;
 
-    // // E. Logika Update Kupon Pelanggan
-    // if (isPakaiKupon) {
-    //   // Jika pakai kupon, kurangi 10 kupon pelanggan
-    //   await _supabase.rpc(
-    //     'increment_kupon',
-    //     params: {'row_id': customerId, 'amount': -10},
-    //   );
-    // } else if (productSize == "19 Liter") {
-    //   // Jika beli galon 19L biasa, tambah kupon sebanyak qty
-    //   await _supabase.rpc(
-    //     'increment_kupon',
-    //     params: {'row_id': customerId, 'amount': qty},
-    //   );
-    // }
+      // 3. Hitung subtotal harga yang harus dibayar pembeli (harga air + biaya antar)
+      final int subtotalHarga = (hargaDasar * item.qty) + biayaAntarTotal;
+
+      // ------------------------------------------
+      // LOGIKA PEMBAGIAN PORSI UANG (PLOTING BIAYA)
+      // ------------------------------------------
+      int pemasukanTokoPerItem = 0;
+      int komisiAntarPerItem = 0;
+      int komisiIsiPerItem = 0;
+
+      // > Porsi Karyawan Antar (Tetap dapat Rp 1.000/galon jika diantar, meskipun airnya gratis pakai kupon)
+      if (item.isAntar) {
+        komisiAntarPerItem = item.qty * 1000;
+      }
+
+      // > Porsi Karyawan Pengisi (Hanya dapat bagi hasil 10% jika beli di tempat, pakai bagi hasil, produk 19L, dan BUKAN pakai kupon)
+      if (!item.isPakaiKupon &&
+          !item.isAntar &&
+          item.isBagiHasil &&
+          item.product.ukuran == "19 Liter") {
+        komisiIsiPerItem =
+            (hargaDasar * 0.1).round() *
+            item.qty; // 10% dari harga dasar (misal Rp 500 per galon)
+      }
+
+      // > Porsi Toko (Sisa uang setelah dipotong hak karyawan antar dan pengisi)
+      pemasukanTokoPerItem =
+          subtotalHarga - komisiAntarPerItem - komisiIsiPerItem;
+
+      // Masukkan hasil pemetaan data ke dalam format JSON Supabase
+      return {
+        'order_id': orderId,
+        'product_id': item.product.id,
+        'qty': item.qty,
+        'is_antar': item.isAntar,
+        'biaya_antar': biayaAntarTotal,
+        'is_bagi_hasil': item.isBagiHasil,
+        'is_pakai_kupon': item.isPakaiKupon,
+        'subtotal_harga': subtotalHarga,
+
+        // Simpan nilai pembagian porsi keuangan ke kolom database yang baru kita buat
+        'pemasukan_toko': pemasukanTokoPerItem,
+        'komisi_antar': komisiAntarPerItem,
+        'komisi_isi': komisiIsiPerItem,
+      };
+    }).toList();
+
+    // C. Simpan semua rincian belanja ke tabel anak 'order_items'
+    await _supabase.from('order_items').insert(itemsToInsert);
   }
 }
 

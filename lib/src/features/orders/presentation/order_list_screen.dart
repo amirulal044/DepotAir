@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../data/order_repository.dart';
 import 'order_form_screen.dart';
+import 'order_detail_screen.dart';
 
 class OrderListScreen extends ConsumerWidget {
   const OrderListScreen({super.key});
@@ -32,11 +33,36 @@ class OrderListScreen extends ConsumerWidget {
                       vertical: 8,
                     ),
                     child: ListTile(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => OrderDetailScreen(order: order),
+                          ),
+                        );
+                      },
+                      // Menampilkan nama pelanggan di judul
                       title: Text(
-                        '${order.customerName} - ${order.productName}',
+                        order.customerName,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      subtitle: Text(
-                        '${dateFormat.format(order.createdAt)}\nQty: ${order.qty} galon',
+                      // Menampilkan daftar produk yang dibeli di sub-judul
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(dateFormat.format(order.createdAt)),
+                          const SizedBox(height: 4),
+                          // Menggabungkan nama semua produk yang dibeli menjadi satu baris teks
+                          Text(
+                            order.items
+                                .map(
+                                  (item) =>
+                                      '${item.productName} (${item.qty}x)',
+                                )
+                                .join(', '),
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        ],
                       ),
                       trailing: Text(
                         currencyFormat.format(order.totalHarga),
@@ -45,7 +71,6 @@ class OrderListScreen extends ConsumerWidget {
                           color: Colors.blue,
                         ),
                       ),
-                      isThreeLine: true,
                     ),
                   );
                 },
