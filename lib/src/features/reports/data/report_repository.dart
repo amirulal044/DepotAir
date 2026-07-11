@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
+import 'package:intl/intl.dart';
 import '../domain/daily_report_model.dart';
 
 class ReportRepository {
@@ -7,21 +9,16 @@ class ReportRepository {
 
   // 1. MENGHITUNG TRANSAKSI HARI INI YANG BELUM DITUTUP BUKU
   Future<Map<String, int>> fetchUnreportedTotals() async {
-    // Ambil seluruh orders beserta item belanjaannya yang belum di-lock (daily_report_id is NULL)
     final response = await _supabase
         .from('orders')
         .select('*, order_items(*)')
-        .isFilter(
-          'daily_report_id',
-          null,
-        ); // <--- Hanya transaksi yang masih "OPEN"
+        .isFilter('daily_report_id', null);
 
     int totalPemasukanToko = 0;
     int totalKomisiAntar = 0;
     int totalKomisiIsi = 0;
     int totalKotorSistem = 0;
 
-    // Iterasi/perulangan untuk menjumlahkan semua porsi uang secara otomatis di Dart
     for (var order in response) {
       final items = order['order_items'] as List? ?? [];
       for (var item in items) {
@@ -45,17 +42,14 @@ class ReportRepository {
     required int totalFisik,
     String? catatan,
   }) async {
-    // A. Ambil akumulasi sistem saat ini
     final totals = await fetchUnreportedTotals();
     final totalToko = totals['total_pemasukan_toko'] ?? 0;
     final totalAntar = totals['total_komisi_antar'] ?? 0;
     final totalIsi = totals['total_komisi_isi'] ?? 0;
     final totalSistem = totals['total_kotor_sistem'] ?? 0;
 
-    // B. Hitung selisih uang (Fisik - Sistem)
     final int selisih = totalFisik - totalSistem;
 
-    // C. Simpan data laporan tutup buku ke tabel induk baru 'daily_reports'
     final reportResponse = await _supabase
         .from('daily_reports')
         .insert({
@@ -63,8 +57,7 @@ class ReportRepository {
           'total_komisi_antar': totalAntar,
           'total_komisi_isi': totalIsi,
           'total_kotor_sistem': totalSistem,
-          'total_kotor_fisik':
-              totalFisik, // Kode ini mencakup nama kolom 'total_kotor_fisik' sesuai SQL kita
+          'total_kotor_fisik': totalFisik,
           'selisih': selisih,
           'catatan': catatan,
           'status': 'closed',
@@ -74,25 +67,30 @@ class ReportRepository {
 
     final String reportId = reportResponse['id'];
 
-    // D. KUNCI TRANSAKSI: Perbarui semua orders yang tadinya NULL menjadi ID laporan ini
     await _supabase
         .from('orders')
         .update({'daily_report_id': reportId})
         .isFilter('daily_report_id', null);
   }
 
-  // 3. MENGAMBIL RIWAYAT LAPORAN TUTUP BUKU SEBELUMNYA
-  Future<List<DailyReport>> fetchHistoricalReports() async {
-    final response = await _supabase
-        .from('daily_reports')
-        .select()
-        .order('report_date', ascending: false);
+  // 3. MENGAMBIL RIWAYAT LAPORAN TUTUP BUKU DENGAN RENTANG TANGGAL OPSIONAL (Bisa untuk filter)
+  Future<List<DailyReport>> fetchHistoricalReports({
+    String? startDate,
+    String? endDate,
+  }) async {
+    var query = _supabase.from('daily_reports').select();
 
+    // Jika parameter tanggal dikirim, lakukan filter rentang tanggal di database Supabase
+    if (startDate != null && endDate != null) {
+      query = query.gte('report_date', startDate).lte('report_date', endDate);
+    }
+
+    final response = await query.order('report_date', ascending: false);
     return response.map((data) => DailyReport.fromJson(data)).toList();
   }
 }
 
-// Provider Riverpod untuk digunakan di UI
+// Provider Riverpod untuk Repository
 final reportRepositoryProvider = Provider((ref) => ReportRepository());
 
 // Provider untuk memantau data transaksi berjalan hari ini
@@ -102,7 +100,58 @@ final unreportedTotalsProvider = FutureProvider.autoDispose<Map<String, int>>((
   return ref.watch(reportRepositoryProvider).fetchUnreportedTotals();
 });
 
-// Provider untuk memantau sejarah laporan tutup buku harian
+// ==========================================
+// STATE FILTER BARU (RIVERPOD) UNTUK LAPORAN
+// ==========================================
+
+// Menyimpan tipe filter yang sedang aktif: 'semua', 'harian', 'mingguan', atau 'bulanan'
+final reportFilterTypeProvider = StateProvider<String>((ref) => 'semua');
+
+// Menyimpan objek tanggal acuan yang sedang dipilih pengguna (default: hari ini)
+final reportFilterDateProvider = StateProvider<DateTime>(
+  (ref) => DateTime.now(),
+);
+
+// Provider sejarah laporan yang secara otomatis memicu query ulang jika filter di atas berubah
 final historicalReportsProvider = FutureProvider<List<DailyReport>>((ref) {
-  return ref.watch(reportRepositoryProvider).fetchHistoricalReports();
+  final filterType = ref.watch(reportFilterTypeProvider);
+  final selectedDate = ref.watch(reportFilterDateProvider);
+
+  String? startDate;
+  String? endDate;
+
+  final formatter = DateFormat('yyyy-MM-dd');
+
+  if (filterType == 'harian') {
+    startDate = formatter.format(selectedDate);
+    endDate = formatter.format(selectedDate);
+  } else if (filterType == 'mingguan') {
+    // Cari hari Senin (Awal Minggu) dan Minggu (Akhir Minggu) dari tanggal terpilih
+    final int dayOfWeek = selectedDate.weekday; // Senin = 1, Minggu = 7
+    final DateTime monday = selectedDate.subtract(
+      Duration(days: dayOfWeek - 1),
+    );
+    final DateTime sunday = selectedDate.add(Duration(days: 7 - dayOfWeek));
+    startDate = formatter.format(monday);
+    endDate = formatter.format(sunday);
+  } else if (filterType == 'bulanan') {
+    // Cari tanggal 1 (Awal Bulan) s.d hari terakhir bulan tersebut (Akhir Bulan)
+    final DateTime firstDay = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      1,
+    );
+    final DateTime lastDay = DateTime(
+      selectedDate.year,
+      selectedDate.month + 1,
+      0,
+    );
+    startDate = formatter.format(firstDay);
+    endDate = formatter.format(lastDay);
+  }
+
+  // Panggil fungsi repository dengan menyertakan rentang tanggal filter hasil konversi di atas
+  return ref
+      .read(reportRepositoryProvider)
+      .fetchHistoricalReports(startDate: startDate, endDate: endDate);
 });
