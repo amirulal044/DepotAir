@@ -63,8 +63,6 @@ class ReportRepository {
           'total_komisi_antar': totalAntar,
           'total_komisi_isi': totalIsi,
           'total_kotor_sistem': totalSistem,
-          'total_kotor_physical':
-              totalFisik, // Jika kolom di SQL Anda tadi bernama total_kotor_fisik, sesuaikan dengan SQL
           'total_kotor_fisik':
               totalFisik, // Kode ini mencakup nama kolom 'total_kotor_fisik' sesuai SQL kita
           'selisih': selisih,

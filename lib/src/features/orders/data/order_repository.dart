@@ -6,11 +6,15 @@ import '../domain/cart_item_model.dart'; // <--- Pastikan import model keranjang
 class OrderRepository {
   final _supabase = Supabase.instance.client;
 
-  // 1. Fungsi Mengambil Riwayat Transaksi (Jalur Baru: orders -> order_items -> produk)
+  // 1. Fungsi Mengambil Riwayat Transaksi (Hanya mengambil yang BELUM tutup buku)
   Future<List<Order>> fetchOrders() async {
     final response = await _supabase
         .from('orders')
         .select('*, pelanggan(nama), order_items(*, produk(nama_produk))')
+        .isFilter(
+          'daily_report_id',
+          null,
+        ) // <--- TAMBAHKAN BARIS INI (Filter reset otomatis)
         .order('created_at', ascending: false);
 
     return response.map((data) => Order.fromJson(data)).toList();

@@ -8,6 +8,7 @@ import '../../products/data/product_repository.dart';
 import '../../products/domain/product_model.dart';
 import '../data/order_repository.dart';
 import '../data/cart_provider.dart'; // Import provider keranjang baru
+import '../../reports/data/report_repository.dart'; // <--- TAMBAHKAN IMPORT INI
 
 import 'WidgetsForm/customer_selector_field.dart';
 import 'WidgetsForm/product_selector_field.dart';
@@ -114,7 +115,7 @@ class _OrderFormScreenState extends ConsumerState<OrderFormScreen> {
 
       // Refresh riwayat transaksi di halaman list
       ref.invalidate(ordersListProvider);
-
+      ref.invalidate(unreportedTotalsProvider);
       // Kosongkan keranjang belanja
       ref.read(cartProvider.notifier).bersihkanKeranjang();
 

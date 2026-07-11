@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../data/report_repository.dart';
+import '../../orders/data/order_repository.dart';
 
 class ReportScreen extends ConsumerStatefulWidget {
   const ReportScreen({super.key});
@@ -53,6 +54,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
       // Refresh seluruh data laporan di UI
       ref.invalidate(unreportedTotalsProvider);
       ref.invalidate(historicalReportsProvider);
+      ref.invalidate(ordersListProvider);
 
       // Bersihkan form inputan
       _fisikController.clear();
