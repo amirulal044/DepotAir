@@ -24,7 +24,7 @@ class ProductSelectorField extends StatelessWidget {
           prefixIcon: Icon(Icons.water_drop_outlined),
           border: OutlineInputBorder(),
         ),
-        value: selectedProduct,
+        initialValue: selectedProduct,
         items: list
             .map(
               (p) => DropdownMenuItem(

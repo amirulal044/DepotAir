@@ -10,7 +10,9 @@ class OrderRepository {
   Future<List<Order>> fetchOrders() async {
     final response = await _supabase
         .from('orders')
-        .select('*, pelanggan(nama), order_items(*, produk(nama_produk))')
+        .select(
+          '*, pelanggan(nama), order_items(*, produk(nama_produk, ukuran))',
+        )
         .isFilter(
           'daily_report_id',
           null,

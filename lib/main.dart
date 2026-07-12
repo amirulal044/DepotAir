@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'src/features/customers/presentation/customer_list_screen.dart';
-import 'src/features/products/presentation/product_list_screen.dart';
-import 'src/features/orders/presentation/order_list_screen.dart';
 import 'home_screen.dart';
 
 void main() async {

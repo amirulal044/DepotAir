@@ -26,6 +26,7 @@ class _CustomerFormScreenState extends ConsumerState<CustomerFormScreen> {
     super.dispose();
   }
 
+  @override
   void initState() {
     super.initState();
     // Isi controller jika sedang mode Edit

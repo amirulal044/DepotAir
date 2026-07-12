@@ -103,9 +103,10 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
             // ==========================================
             totalsAsync.when(
               data: (totals) {
+                final int openOrdersCount = totals['open_orders_count'] ?? 0;
                 final int totalSistem = totals['total_kotor_sistem'] ?? 0;
 
-                if (totalSistem == 0) {
+                if (openOrdersCount == 0) {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(24.0),

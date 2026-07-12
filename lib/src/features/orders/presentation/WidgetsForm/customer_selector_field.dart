@@ -24,7 +24,7 @@ class CustomerSelectorField extends StatelessWidget {
           prefixIcon: Icon(Icons.person_outline),
           border: OutlineInputBorder(),
         ),
-        value: selectedCustomer,
+        initialValue: selectedCustomer,
         items: list
             .map((c) => DropdownMenuItem(value: c, child: Text(c.nama)))
             .toList(),

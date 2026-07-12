@@ -85,8 +85,9 @@ class OrderDetailScreen extends StatelessWidget {
                       horizontal: 16,
                       vertical: 8,
                     ),
+                    // UBAH DI SINI: Menambahkan keterangan ukuran di sebelah nama produk
                     title: Text(
-                      item.productName,
+                      '${item.productName} ${item.productSize}',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Column(

@@ -34,6 +34,7 @@ class ReportRepository {
       'total_komisi_antar': totalKomisiAntar,
       'total_komisi_isi': totalKomisiIsi,
       'total_kotor_sistem': totalKotorSistem,
+      'open_orders_count': response.length,
     };
   }
 

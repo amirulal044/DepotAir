@@ -28,7 +28,7 @@ class ProductRepository {
       debugPrint('=========================================');
 
       return list;
-    } catch (e, stacktrace) {
+    } catch (e) {
       debugPrint('❌ [DEBUG] GAGAL MEMUAT PRODUK!');
       debugPrint('⚠️ Error: $e');
       rethrow;

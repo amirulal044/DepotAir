@@ -37,7 +37,10 @@ class OrderListItem extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               order.items
-                  .map((item) => '${item.productName} (${item.qty}x)')
+                  .map(
+                    (item) =>
+                        '${item.productName}  ${item.productSize} (${item.qty}x)',
+                  )
                   .join(', '),
               style: const TextStyle(color: Colors.grey),
             ),

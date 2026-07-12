@@ -21,46 +21,20 @@ class OrderListScreen extends ConsumerWidget {
             return const Center(child: Text('Belum ada transaksi.'));
           }
 
-          // ==========================================
-          // LOGIKA HITUNG AKUMULASI DARI DATA ORDERS
-          // ==========================================
-          int totalPemasukanToko = 0;
-          int totalKomisiAntar = 0;
-          int totalKomisiIsi = 0;
-          int totalKotorSistem = 0;
-          int totalGalonTerjual = 0;
+          // KUNCI EFISIENSI: Satukan kartu akumulasi ke dalam satu ListView
+          return ListView.builder(
+            // Jumlah item ditambah 1 untuk menaruh kartu akumulasi di paling atas
+            itemCount: orders.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                // 1. Tampilkan kartu akumulasi di indeks ke-0 (paling atas)
+                return OrderAccumulationCard(orders: orders);
+              }
 
-          for (var order in orders) {
-            totalKotorSistem += order.totalHarga;
-            for (var item in order.items) {
-              totalPemasukanToko += item.pemasukanToko;
-              totalKomisiAntar += item.komisiAntar;
-              totalKomisiIsi += item.komisiIsi;
-              totalGalonTerjual += item.qty;
-            }
-          }
-
-          return Column(
-            children: [
-              // 1. KARTU RINGKASAN AKUMULASI (Memanggil Widget yang Dipisah)
-              OrderAccumulationCard(
-                totalGalon: totalGalonTerjual,
-                totalToko: totalPemasukanToko,
-                totalDriver: totalKomisiAntar,
-                totalBagiHasil: totalKomisiIsi,
-                totalKotor: totalKotorSistem,
-              ),
-
-              // 2. DAFTAR RIWAYAT TRANSAKSI (Memanggil List Item yang Dipisah)
-              Expanded(
-                child: ListView.builder(
-                  itemCount: orders.length,
-                  itemBuilder: (context, index) {
-                    return OrderListItem(order: orders[index]);
-                  },
-                ),
-              ),
-            ],
+              // 2. Tampilkan baris pesanan di bawahnya (indeks digeser mundur 1)
+              final order = orders[index - 1];
+              return OrderListItem(order: order);
+            },
           );
         },
         error: (e, st) => Center(child: Text('Error: $e')),
