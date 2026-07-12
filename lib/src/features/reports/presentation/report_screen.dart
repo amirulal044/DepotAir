@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../data/report_repository.dart';
 import '../../orders/data/order_repository.dart';
 
+// Impor semua sub-widget modular baru kita
 import 'widgets/report_system_totals_card.dart';
 import 'widgets/report_discrepancy_card.dart';
+import 'widgets/report_filter_section.dart';
+import 'widgets/report_period_summary_card.dart';
 import 'widgets/report_history_item.dart';
 
 class ReportScreen extends ConsumerStatefulWidget {
@@ -76,38 +78,11 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
     }
   }
 
-  // Fungsi memicu munculnya pemilih tanggal (Date Picker)
-  Future<void> _pilihTanggalFilter(
-    BuildContext context,
-    DateTime currentDate,
-  ) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: currentDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2101),
-    );
-    if (picked != null && picked != currentDate) {
-      ref.read(reportFilterDateProvider.notifier).state = picked;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final totalsAsync = ref.watch(unreportedTotalsProvider);
     final historyAsync = ref.watch(historicalReportsProvider);
-
-    // Watch status filter yang sedang aktif
     final activeFilterType = ref.watch(reportFilterTypeProvider);
-    final activeFilterDate = ref.watch(reportFilterDateProvider);
-
-    final currencyFormat = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: 'Rp ',
-      decimalDigits: 0,
-    );
-    final dateFormat = DateFormat('dd MMMM yyyy');
-    final monthFormat = DateFormat('MMMM yyyy');
 
     return DefaultTabController(
       length: 2,
@@ -224,67 +199,14 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
             ),
 
             // ==========================================
-            // TAB 2: SEJARAH LAPORAN TUTUP BUKU HARIAN DENGAN FILTER FLEKSIBEL
+            // TAB 2: SEJARAH LAPORAN DENGAN FILTER (SANGAT BERSIH & MODULAR)
             // ==========================================
             Column(
               children: [
-                // A. PILIHAN TOMBOL FILTER HORISONTAL (SEUMUA, HARIAN, MINGGUAN, BULANAN)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      _buildFilterChip(ref, 'semua', 'Semua', activeFilterType),
-                      const SizedBox(width: 8),
-                      _buildFilterChip(
-                        ref,
-                        'harian',
-                        'Harian',
-                        activeFilterType,
-                      ),
-                      const SizedBox(width: 8),
-                      _buildFilterChip(
-                        ref,
-                        'mingguan',
-                        'Mingguan',
-                        activeFilterType,
-                      ),
-                      const SizedBox(width: 8),
-                      _buildFilterChip(
-                        ref,
-                        'bulanan',
-                        'Bulanan',
-                        activeFilterType,
-                      ),
-                    ],
-                  ),
-                ),
+                // 1. WIDGET BAGIAN FILTER (ChoiceChips & Kalender)
+                const ReportFilterSection(),
 
-                // B. PEMILIH TANGGAL DINAMIS (Hanya muncul jika bukan filter 'semua')
-                if (activeFilterType != 'semua')
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 4,
-                    ),
-                    child: OutlinedButton.icon(
-                      onPressed: () =>
-                          _pilihTanggalFilter(context, activeFilterDate),
-                      icon: const Icon(Icons.date_range),
-                      label: Text(
-                        activeFilterType == 'harian'
-                            ? 'Tanggal: ${dateFormat.format(activeFilterDate)}'
-                            : (activeFilterType == 'mingguan'
-                                  ? 'Minggu dari: ${dateFormat.format(activeFilterDate)}'
-                                  : 'Bulan: ${monthFormat.format(activeFilterDate)}'),
-                      ),
-                    ),
-                  ),
-
-                // C. LIST DATA SEJARAH TUTUP BUKU & KARTU AKUMULASI PERIODE
+                // 2. DAFTAR RIWAYAT DENGAN KARTU AKUMULASI PERIODE
                 Expanded(
                   child: historyAsync.when(
                     data: (listLaporan) {
@@ -296,7 +218,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                         );
                       }
 
-                      // LOGIKA HITUNG AKUMULASI PERIODE TERPILIH
+                      // Hitung akumulasi periode terpilih
                       int totalTokoPeriode = 0;
                       int totalDriverPeriode = 0;
                       int totalIsiPeriode = 0;
@@ -311,80 +233,23 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
 
                       return ListView.builder(
                         padding: const EdgeInsets.all(16),
-                        itemCount:
-                            listLaporan.length +
-                            1, // +1 untuk menyelipkan Card Akumulasi Periode di paling atas
+                        itemCount: listLaporan.length + 1,
                         itemBuilder: (context, index) {
                           if (index == 0) {
-                            // TAMPILKAN CARD AKUMULASI REKAPITULASI UNTUK PERIODE YANG SEDANG DIFILTER
-                            return Card(
-                              color: Colors.blue.shade50,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(color: Colors.blue.shade100),
-                              ),
-                              margin: const EdgeInsets.only(bottom: 16),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'TOTAL REKAPITULASI PERIODE (${activeFilterType.toUpperCase()})',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue.shade900,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                    const Divider(color: Colors.blue),
-                                    _buildSummaryRow(
-                                      '• Total Bersih Toko:',
-                                      currencyFormat.format(totalTokoPeriode),
-                                    ),
-                                    _buildSummaryRow(
-                                      '• Total Gaji Driver:',
-                                      currencyFormat.format(totalDriverPeriode),
-                                      color: Colors.green.shade800,
-                                    ),
-                                    _buildSummaryRow(
-                                      '• Total Bagi Hasil:',
-                                      currencyFormat.format(totalIsiPeriode),
-                                      color: Colors.orange.shade900,
-                                    ),
-                                    const Divider(color: Colors.blue),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        const Text(
-                                          'Total Kotor Periode:',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        Text(
-                                          currencyFormat.format(
-                                            totalSistemPeriode,
-                                          ),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                            color: Colors.blue,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            // 2. KARTU RINGKASAN AKUMULASI PERIODE (DIPISAH)
+                            return ReportPeriodSummaryCard(
+                              activeFilterType: activeFilterType,
+                              totalToko: totalTokoPeriode,
+                              totalDriver: totalDriverPeriode,
+                              totalIsi: totalIsiPeriode,
+                              totalSistem: totalSistemPeriode,
                             );
                           }
 
-                          // TAMPILKAN ITEM DAFTAR LAPORAN HARIAN DI BAWAH KARTU AKUMULASI
-                          final lap = listLaporan[index - 1];
-                          return ReportHistoryItem(report: lap);
+                          // 3. BARIS RIWAYAT LAPORAN HARIAN (DIPISAH)
+                          return ReportHistoryItem(
+                            report: listLaporan[index - 1],
+                          );
                         },
                       );
                     },
@@ -397,67 +262,6 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  // Widget helper untuk membuat baris informasi rapi kiri-kanan
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-
-  // Widget helper untuk ChoiceChip filter horisontal
-  Widget _buildFilterChip(
-    WidgetRef ref,
-    String type,
-    String label,
-    String activeType,
-  ) {
-    final isSelected = activeType == type;
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (bool selected) {
-        if (selected) {
-          ref.read(reportFilterTypeProvider.notifier).state = type;
-        }
-      },
-    );
-  }
-
-  // Widget helper untuk baris rekapitulasi atas
-  Widget _buildSummaryRow(String label, String value, {Color? color}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: color ?? Colors.grey.shade700,
-              fontWeight: color != null ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: color ?? Colors.black87,
-            ),
-          ),
-        ],
       ),
     );
   }

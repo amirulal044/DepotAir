@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/legacy.dart'; // Tetap gunakan impor legacy untuk Riverpod 3.x Anda
 import 'package:intl/intl.dart';
 import '../domain/daily_report_model.dart';
 
@@ -101,7 +101,7 @@ final unreportedTotalsProvider = FutureProvider.autoDispose<Map<String, int>>((
 });
 
 // ==========================================
-// STATE FILTER BARU (RIVERPOD) UNTUK LAPORAN
+// STATE FILTER (RIVERPOD) UNTUK LAPORAN
 // ==========================================
 
 // Menyimpan tipe filter yang sedang aktif: 'semua', 'harian', 'mingguan', atau 'bulanan'
@@ -112,10 +112,16 @@ final reportFilterDateProvider = StateProvider<DateTime>(
   (ref) => DateTime.now(),
 );
 
+// BARU: Menyimpan Minggu keberapa yang sedang dipilih (Minggu 1, 2, 3, atau 4)
+final reportFilterWeekIndexProvider = StateProvider<int>((ref) => 1);
+
 // Provider sejarah laporan yang secara otomatis memicu query ulang jika filter di atas berubah
 final historicalReportsProvider = FutureProvider<List<DailyReport>>((ref) {
   final filterType = ref.watch(reportFilterTypeProvider);
   final selectedDate = ref.watch(reportFilterDateProvider);
+  final weekIndex = ref.watch(
+    reportFilterWeekIndexProvider,
+  ); // <--- BARU: Pantau minggu aktif
 
   String? startDate;
   String? endDate;
@@ -126,16 +132,32 @@ final historicalReportsProvider = FutureProvider<List<DailyReport>>((ref) {
     startDate = formatter.format(selectedDate);
     endDate = formatter.format(selectedDate);
   } else if (filterType == 'mingguan') {
-    // Cari hari Senin (Awal Minggu) dan Minggu (Akhir Minggu) dari tanggal terpilih
-    final int dayOfWeek = selectedDate.weekday; // Senin = 1, Minggu = 7
-    final DateTime monday = selectedDate.subtract(
-      Duration(days: dayOfWeek - 1),
-    );
-    final DateTime sunday = selectedDate.add(Duration(days: 7 - dayOfWeek));
-    startDate = formatter.format(monday);
-    endDate = formatter.format(sunday);
+    // METODE B: Pola Rentang Tanggal 7 Harian Tetap
+    final year = selectedDate.year;
+    // Format nomor bulan dengan padding dua digit, misal: '07'
+    final month = selectedDate.month.toString().padLeft(2, '0');
+
+    if (weekIndex == 1) {
+      startDate = '$year-$month-01';
+      endDate = '$year-$month-07';
+    } else if (weekIndex == 2) {
+      startDate = '$year-$month-08';
+      endDate = '$year-$month-14';
+    } else if (weekIndex == 3) {
+      startDate = '$year-$month-15';
+      endDate = '$year-$month-21';
+    } else if (weekIndex == 4) {
+      // Minggu terakhir otomatis mendeteksi jumlah hari terakhir di bulan tersebut (28, 29, 30, atau 31)
+      final lastDay = DateTime(
+        selectedDate.year,
+        selectedDate.month + 1,
+        0,
+      ).day;
+      startDate = '$year-$month-22';
+      endDate = '$year-$month-${lastDay.toString().padLeft(2, '0')}';
+    }
   } else if (filterType == 'bulanan') {
-    // Cari tanggal 1 (Awal Bulan) s.d hari terakhir bulan tersebut (Akhir Bulan)
+    // Cari tanggal 1 s.d hari terakhir bulan tersebut
     final DateTime firstDay = DateTime(
       selectedDate.year,
       selectedDate.month,
@@ -150,7 +172,7 @@ final historicalReportsProvider = FutureProvider<List<DailyReport>>((ref) {
     endDate = formatter.format(lastDay);
   }
 
-  // Panggil fungsi repository dengan menyertakan rentang tanggal filter hasil konversi di atas
+  // Jalankan penarikan data ke Supabase dengan menyertakan rentang tanggal filter baru di atas
   return ref
       .read(reportRepositoryProvider)
       .fetchHistoricalReports(startDate: startDate, endDate: endDate);
