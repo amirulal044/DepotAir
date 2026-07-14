@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/report_repository.dart';
 import '../../orders/data/order_repository.dart';
+import '../../orders/domain/order_model.dart';
 
-// Impor semua sub-widget modular baru kita
+// Impor semua sub-widget modular
 import 'widgets/report_system_totals_card.dart';
 import 'widgets/report_discrepancy_card.dart';
 import 'widgets/report_filter_section.dart';
@@ -56,6 +57,9 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
       ref.invalidate(unreportedTotalsProvider);
       ref.invalidate(historicalReportsProvider);
       ref.invalidate(ordersListProvider);
+      ref.invalidate(
+        periodOrdersProvider,
+      ); // <--- BARU: Ikut invalidate saat tutup buku sukses
 
       _fisikController.clear();
       _catatanController.clear();
@@ -82,6 +86,9 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
   Widget build(BuildContext context) {
     final totalsAsync = ref.watch(unreportedTotalsProvider);
     final historyAsync = ref.watch(historicalReportsProvider);
+    final periodOrdersAsync = ref.watch(
+      periodOrdersProvider,
+    ); // <--- BARU: Pantau pesanan periodik
     final activeFilterType = ref.watch(reportFilterTypeProvider);
 
     return DefaultTabController(
@@ -134,10 +141,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                     ),
                     const SizedBox(height: 8),
                     ReportSystemTotalsCard(
-                      totalToko: totals['total_pemasukan_toko'] ?? 0,
-                      totalDriver: totals['total_komisi_antar'] ?? 0,
-                      totalIsi: totals['total_komisi_isi'] ?? 0,
-                      totalSistem: totalSistem,
+                      openOrders: totals['open_orders'] as List<Order>? ?? [],
                     ),
                     const SizedBox(height: 24),
                     const Text(
@@ -200,14 +204,11 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
             ),
 
             // ==========================================
-            // TAB 2: SEJARAH LAPORAN DENGAN FILTER (SANGAT BERSIH & MODULAR)
+            // TAB 2: SEJARAH LAPORAN DENGAN FILTER PERIODIK COMPOSITE
             // ==========================================
             Column(
               children: [
-                // 1. WIDGET BAGIAN FILTER (ChoiceChips & Kalender)
                 const ReportFilterSection(),
-
-                // 2. DAFTAR RIWAYAT DENGAN KARTU AKUMULASI PERIODE
                 Expanded(
                   child: historyAsync.when(
                     data: (listLaporan) {
@@ -219,35 +220,35 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                         );
                       }
 
-                      // Hitung akumulasi periode terpilih
-                      int totalTokoPeriode = 0;
-                      int totalDriverPeriode = 0;
-                      int totalIsiPeriode = 0;
-                      int totalSistemPeriode = 0;
-
-                      for (var lap in listLaporan) {
-                        totalTokoPeriode += lap.totalPemasukanToko;
-                        totalDriverPeriode += lap.totalKomisiAntar;
-                        totalIsiPeriode += lap.totalKomisiIsi;
-                        totalSistemPeriode += lap.totalKotorSistem;
-                      }
-
                       return ListView.builder(
                         padding: const EdgeInsets.all(16),
                         itemCount: listLaporan.length + 1,
                         itemBuilder: (context, index) {
                           if (index == 0) {
-                            // 2. KARTU RINGKASAN AKUMULASI PERIODE (DIPISAH)
-                            return ReportPeriodSummaryCard(
-                              activeFilterType: activeFilterType,
-                              totalToko: totalTokoPeriode,
-                              totalDriver: totalDriverPeriode,
-                              totalIsi: totalIsiPeriode,
-                              totalSistem: totalSistemPeriode,
+                            // 2. KARTU REKAPITULASI PERIODIK (Membaca data periodOrdersAsync)
+                            return periodOrdersAsync.when(
+                              data: (orders) => ReportPeriodSummaryCard(
+                                activeFilterType: activeFilterType,
+                                periodOrders:
+                                    orders, // <--- Kirim list order periodik asli
+                              ),
+                              error: (e, st) => Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Text('Gagal memuat rekap: $e'),
+                                ),
+                              ),
+                              loading: () => const Card(
+                                child: Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                ),
+                              ),
                             );
                           }
 
-                          // 3. BARIS RIWAYAT LAPORAN HARIAN (DIPISAH)
                           return ReportHistoryItem(
                             report: listLaporan[index - 1],
                           );

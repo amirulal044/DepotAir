@@ -183,7 +183,7 @@ class OrderAccumulationCard extends StatelessWidget {
                       margin: const EdgeInsets.symmetric(vertical: 4),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.8),
+                        color: Colors.white.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: Colors.blue.shade100),
                       ),

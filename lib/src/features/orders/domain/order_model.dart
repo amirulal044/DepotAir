@@ -27,7 +27,10 @@ class Order {
       id: json['id'],
       customerName: json['pelanggan']['nama'] ?? 'Tanpa Nama',
       totalHarga: json['total_bayar'] ?? 0,
-      createdAt: DateTime.parse(json['created_at']),
+
+      // DIUBAH DI SINI: Ditambahkan .toLocal() agar otomatis mengikuti zona waktu HP Kasir
+      createdAt: DateTime.parse(json['created_at']).toLocal(),
+
       items: parsedItems,
       dailyReportId: json['daily_report_id'],
     );
